@@ -46,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true", help="Do not actually post to X; print the tweet instead.")
     parser.add_argument("--x-check-auth", action="store_true", help="Check X API authentication and exit.")
+    parser.add_argument("--speedtest-path", help="Path to speedtest executable (defaults to 'speedtest' in PATH).")
     return parser.parse_args()
 
 
@@ -75,6 +76,7 @@ def resolve_config(args: argparse.Namespace) -> Dict[str, Any]:
         "x_bearer_token": args.x_bearer_token or config.get("x_bearer_token"),
         "min_drop_percent": args.min_drop_percent,
         "dry_run": args.dry_run,
+        "speedtest_path": args.speedtest_path or config.get("speedtest_path") or "speedtest",
     }
     return merged
 
@@ -83,10 +85,15 @@ def bits_per_second_to_mbps(bits: float) -> float:
     return bits / 1_000_000.0
 
 
-def run_speedtest() -> Dict[str, Optional[float]]:
+def run_speedtest(speedtest_path: str = "speedtest") -> Dict[str, Optional[float]]:
+    """Run speedtest CLI and return download/upload speeds in Mbps.
+    
+    Args:
+        speedtest_path: Path to the speedtest executable (defaults to 'speedtest' in PATH).
+    """
     try:
         completed = subprocess.run(
-            ["speedtest", "--json"],
+            [speedtest_path, "--json"],
             capture_output=True,
             text=True,
             check=True,
@@ -98,8 +105,8 @@ def run_speedtest() -> Dict[str, Optional[float]]:
         }
     except FileNotFoundError as exc:
         raise RuntimeError(
-            "Ookla speedtest CLI was not found in PATH. "
-            "Install speedtest-cli or Ookla speedtest and retry."
+            f"Speedtest executable not found at '{speedtest_path}'. "
+            "Install speedtest-cli or Ookla speedtest, or use --speedtest-path to specify the path."
         ) from exc
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
@@ -214,7 +221,7 @@ def main() -> int:
     )
 
     print("Running speed test...")
-    results = run_speedtest()
+    results = run_speedtest(config["speedtest_path"])
     actual_download = results["download_mbps"] or -1
     actual_upload = results.get("upload_mbps")
     print(
