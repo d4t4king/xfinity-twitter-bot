@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
         help="Minimum download drop percent to trigger a post.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Do not actually post to X; print the tweet instead.")
+    parser.add_argument("--x-check-auth", action="store_true", help="Check X API authentication and exit.")
     return parser.parse_args()
 
 
@@ -84,25 +85,6 @@ def bits_per_second_to_mbps(bits: float) -> float:
 
 def run_speedtest() -> Dict[str, Optional[float]]:
     try:
-        import speedtest
-
-        tester = speedtest.Speedtest()
-        tester.get_best_server()
-        download_bps = tester.download()
-        upload_bps = None
-        try:
-            upload_bps = tester.upload(pre_allocate=False)
-        except Exception:
-            upload_bps = None
-
-        return {
-            "download_mbps": bits_per_second_to_mbps(download_bps),
-            "upload_mbps": bits_per_second_to_mbps(upload_bps) if upload_bps else None,
-        }
-    except Exception:
-        pass
-
-    try:
         completed = subprocess.run(
             ["speedtest", "--json"],
             capture_output=True,
@@ -116,7 +98,7 @@ def run_speedtest() -> Dict[str, Optional[float]]:
         }
     except FileNotFoundError as exc:
         raise RuntimeError(
-            "speedtest-cli is not installed and Ookla speedtest CLI was not found in PATH. "
+            "Ookla speedtest CLI was not found in PATH. "
             "Install speedtest-cli or Ookla speedtest and retry."
         ) from exc
     except subprocess.CalledProcessError as exc:
@@ -155,6 +137,37 @@ def validate_post_credentials(config: Dict[str, Any]) -> bool:
     )
 
 
+def check_x_auth(config: Dict[str, Any]) -> bool:
+    """Check X API authentication without performing any actions."""
+    try:
+        import tweepy
+    except ImportError as exc:
+        raise RuntimeError(
+            "Tweepy is required to check X API auth. Install dependencies from requirements.txt."
+        ) from exc
+
+    if not validate_post_credentials(config):
+        raise RuntimeError(
+            "Missing X API credentials. Provide x_consumer_key, x_consumer_secret, "
+            "x_access_token and x_access_secret via config or command line."
+        )
+
+    try:
+        client = tweepy.Client(
+            consumer_key=config["x_consumer_key"],
+            consumer_secret=config["x_consumer_secret"],
+            access_token=config["x_access_token"],
+            access_token_secret=config["x_access_secret"],
+            bearer_token=config.get("x_bearer_token"),
+            wait_on_rate_limit=True,
+        )
+        # Attempt to verify credentials by making a simple API call.
+        client.get_me()
+        return True
+    except Exception as exc:
+        raise RuntimeError(f"X API authentication failed: {exc}") from exc
+
+
 def post_to_x(tweet_text: str, config: Dict[str, Any]) -> None:
     try:
         import tweepy
@@ -184,6 +197,13 @@ def main() -> int:
     args = parse_args()
     config = resolve_config(args)
 
+    # Handle X API authentication check mode.
+    if args.x_check_auth:
+        print("Checking X API authentication...")
+        check_x_auth(config)
+        print("X API authentication successful.")
+        return 0
+
     if config["advertised_download_mbps"] is None:
         raise RuntimeError("Advertised download speed is required via config or command line.")
 
@@ -195,7 +215,7 @@ def main() -> int:
 
     print("Running speed test...")
     results = run_speedtest()
-    actual_download = results["download_mbps"]
+    actual_download = results["download_mbps"] or -1
     actual_upload = results.get("upload_mbps")
     print(
         f"Measured download: {actual_download:.1f} Mbps",
