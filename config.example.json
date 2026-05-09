@@ -1,0 +1,13 @@
+{
+  "x_username": "your_x_username",
+  "x_password": "your_x_password",
+  "x_handle": "@your_x_handle",
+  "isp_name": "Example ISP",
+  "isp_handle": "@ExampleISP",
+  "advertised_download_mbps": 500,
+  "advertised_upload_mbps": 50,
+  "x_consumer_key": "YOUR_CONSUMER_KEY",
+  "x_consumer_secret": "YOUR_CONSUMER_SECRET",
+  "x_access_token": "YOUR_ACCESS_TOKEN",
+  "x_access_secret": "YOUR_ACCESS_SECRET"
+}
