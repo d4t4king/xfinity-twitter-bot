@@ -99,12 +99,12 @@ def run_speedtest() -> Dict[str, Optional[float]]:
             "download_mbps": bits_per_second_to_mbps(download_bps),
             "upload_mbps": bits_per_second_to_mbps(upload_bps) if upload_bps else None,
         }
-    except ImportError:
+    except Exception:
         pass
 
     try:
         completed = subprocess.run(
-            ["speedtest", "--accept-license", "--accept-gdpr", "--format=json"],
+            ["speedtest", "--json"],
             capture_output=True,
             text=True,
             check=True,
@@ -177,9 +177,7 @@ def post_to_x(tweet_text: str, config: Dict[str, Any]) -> None:
         bearer_token=config.get("x_bearer_token"),
         wait_on_rate_limit=True,
     )
-    response = client.create_tweet(text=tweet_text)
-    if getattr(response, "errors", None):
-        raise RuntimeError(f"X publish failed: {response.errors}")
+    client.create_tweet(text=tweet_text)
 
 
 def main() -> int:
